@@ -1,0 +1,489 @@
+# Optimized Ensemble Techniques with Smart Feature Selection for Real Estate Price Estimation
+
+# Use a notebook's package manager to add the machine learning package to the existing environment.
+!pip install catboost
+
+Load libraries
+
+# Present a set of data analysis tools with a unique abbreviation.
+import pandas as pdes
+# Introduce a kit for numerical computations with a distinct name.
+import numpy as npps
+# Incorporate the integrated module for time-related operations.
+import time
+# Open a well-known plotting library and assign a shorthand name to it.
+import matplotlib.pyplot as plets
+# Use a common alias to import a statistical visualization program.
+import seaborn as sans
+# Access tools for scaling numerical data and category encoding
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+# Introduce a technique that uses basic tactics to deal with missing values.
+from sklearn.impute import SimpleImputer
+# Provide a feature that divides datasets into sections for testing and training.
+from sklearn.model_selection import train_test_split
+# Bring along a variety of error measuring instruments to assess the precision of your predictions.
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+# Use statistical modeling tools to analyze data more thoroughly.
+import statsmodels.api as sm
+# To combine many processing stages into a single workflow, import a utility.
+from sklearn.pipeline import Pipeline
+# Open a meta-model framework that improves predictions by stacking numerous regressors.
+from sklearn.ensemble import StackingRegressor
+# Include a fast and accurate gradient boosting framework with good performance.
+from xgboost import XGBRegressor
+# Use an efficient, distributed, and quick gradient boosting library.
+from lightgbm import LGBMRegressor
+# Use a gradient boosting package that is renowned for automatically managing category features.
+from catboost import CatBoostRegressor
+# Introduce a support vector-based regression tool.
+from sklearn.svm import SVR
+# Integrate several modeling and data handling procedures into a single workflow.
+from sklearn.pipeline import Pipeline
+# To improve the quality of the results, permit guesses from many students to be merged.
+from sklearn.ensemble import StackingRegressor
+# Obtain probability distributions that are helpful for adjusting hyperparameters
+from scipy.stats import randint, uniform
+# To maximize a learning algorithm, allow searching across different configuration options.
+from sklearn.model_selection import RandomizedSearchCV
+# Introduce instruments to assess the validity of numerical predictions.
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+# Include a way to modify numerical attributes such that their statistical ranges are comparable.
+from sklearn.preprocessing import StandardScaler
+
+
+Mount the Drive
+
+# To immediately access files, connect the user's cloud storage to the virtual workspace.
+from google.colab import drive
+# Launch the external disk system as soon as possible in the current session.
+drive.mount('/content/drive')
+
+load dataset
+
+# Open a tabular data structure and load a dataset from a cloud storage location for analysis.
+PricePridiction = pdes.read_csv('/content/drive/MyDrive/Colab Notebooks/house price pridiction/dataset/Ames_Housing_Data.csv')
+
+# To obtain a preliminary overview, display the first few entries of the loaded house data.
+PricePridiction.head()
+
+# Indicate the general structure by stating the number of characteristics and entries in the house data.
+PricePridiction.shape
+
+# Show the kind of data that is kept in each feature of the housing dataset.
+PricePridiction.dtypes
+
+# List key features of the housing data, such as field kinds, size, and missing values.
+PricePridiction.info()
+
+# Produce summary statistics that explain the numerical properties of the dataset, including its form, dispersion, and central tendency.
+PricePridiction.describe()
+
+drop dupilcates
+
+# The housing dataset's entries should all be unique, therefore eliminate any duplicate records.
+PricePridiction = PricePridiction.drop_duplicates()
+
+Remove null values
+
+# Display the names and numbers of the dataset's incompletely filled-in fields.
+print("Columns with null values:")
+print(PricePridiction.isnull().sum()[PricePridiction.isnull().sum() > 0])
+
+# Remove all features with missing data, retaining just those with complete entries.
+PricePridiction_cleaned = PricePridiction.dropna(axis=1)
+
+# After removing features with missing entries, list the remaining feature IDs.
+print("\nRemaining columns after dropping those with nulls:")
+print(PricePridiction_cleaned.columns)
+
+# After deleting fields that aren't complete, show how many records and attributes are still present in the improved housing data.
+PricePridiction_cleaned.shape
+
+define x and y variables
+
+# Remove the column with the goal measurements to create a new table.
+X = PricePridiction_cleaned.drop('SalePrice', axis=1)
+# Take out the vector with the values we wish to forecast.
+y = PricePridiction_cleaned['SalePrice']
+
+label encoding
+
+# Determine whether columns in the feature set have non-numeric values.
+categorical_cols = X.select_dtypes(include='object').columns
+# Go over each category attribute that has been discovered.
+for col in categorical_cols:
+    # Set up a transformer that creates number labels from categories.
+    le = LabelEncoder()
+    # Replace the original values in the current column with the encoding transformation.
+    X[col] = le.fit_transform(X[col])
+# Show a notification that features have been changed.
+print("Features (X) after Label Encoding:")
+# Display the converted feature collection's first rows.
+display(X.head())
+# Show a label indicating that the values of the target variable will be displayed next.
+print("\nTarget (y):")
+# Display the target value collection's first entries.
+display(y.head())
+
+Forward Feature Selection
+
+# Establish a procedure for adding predictive factors iteratively in accordance with statistical significance.
+def forward_selection(X, y, threshold_in=0.05):
+    # To save the selected characteristics, start with an empty list.
+    initial_features = []
+    # Monitor qualities that have not yet been assessed.
+    remaining_features = list(X.columns)
+    # Create a list at first to store traits that have been verified as useful.
+    selected_features = []
+    # Proceed as long as there are untested qualities.
+    while remaining_features:
+        # Get a container ready for the attribute significance scores for the current round.
+        scores_with_candidates = []
+        # Review every candidate attribute that is still accessible.
+        for candidate in remaining_features:
+            # To deal with any problems during model fitting, use a try-except block.
+            try:
+                model = sm.OLS(y, sm.add_constant(X[initial_features + [candidate]])).fit()
+                # Construct a regression model with the current candidate and previously selected variables.
+                p_val = model.pvalues[candidate]
+                # Get the significance value linked to the model's candidate variable.
+                scores_with_candidates.append((candidate, p_val))
+                # Add the contender to the scores list along with the relevant metric.
+            except Exception as e:
+                # If a candidate is skipped because of an error, print a notice and proceed.
+                print(f"Skipping {candidate} due to error: {e}")
+                continue
+        #Cease the iteration if no candidates passed validation.
+        if not scores_with_candidates:
+            break
+        # Sort candidates based on their scores from most to least statistically significant.
+        scores_with_candidates.sort(key=lambda x: x[1])
+        # Determine the top applicant and the statistical measure that goes with it.
+        best_candidate, best_pval = scores_with_candidates[0]
+        # Accept this property if the measure satisfies the threshold requirement.
+        if best_pval < threshold_in:
+            initial_features.append(best_candidate)
+            # Include the applicant in the list of characteristics that have been chosen.# Include the applicant in the list of characteristics that have been chosen.
+            remaining_features.remove(best_candidate)
+            # Take the applicant out of the pool of untested candidates.
+            selected_features.append(best_candidate)
+            # Output the acceptable characteristic along with its metric value.
+            print(f"Selected feature: {best_candidate} with p-value {best_pval}")
+            # If no candidate meets the threshold, stop.
+        else:
+            break
+    # Provide the set of verified characteristics back.
+    return selected_features
+# To extract a selection of significant explanatory factors from the data, use the specified procedure.
+selected_features = forward_selection(X, y, threshold_in=0.05)
+# Show the final properties that were selected throughout the selection process.
+print(f"Selected Features (Forward Selection): {selected_features}")
+# Construct a new data structure with just the chosen subset of characteristics.
+X_selected = X[selected_features]
+
+MinMaxScaler
+
+# Start a program that rescales numerical variables to a consistent range.
+scaler = MinMaxScaler()
+# Save the modified output after applying the rescaling procedure to the selected collection of features.
+X_scaled = scaler.fit_transform(X_selected)
+
+split the dataset in 70/30
+
+# For model learning and validation, divide the standardized input features and target values into two groups, maintaining fixed proportions for repeatability.
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+# Illustrate the number of traits and instances in the group that were utilized to construct the prediction approach.
+print("Shape of X_train:", X_train.shape)
+# Show the quantity of characteristics and records in the cohort that was kept back for model evaluation.
+print("Shape of X_test:", X_test.shape)
+# Indicate the output variable's size that was utilized to create the model.
+print("Shape of y_train:", y_train.shape)
+# Display the number of replies saved for a further assessment of the model's accuracy.
+print("Shape of y_test:", y_test.shape)
+
+Model Definitions
+
+# Create a sequence that summarizes a technique that uses iterative learning on decision frameworks to improve predictions.
+xgb_pipe = Pipeline([
+    ('reg', XGBRegressor(n_estimators=300, learning_rate=0.05, max_depth=6,
+                         subsample=0.8, colsample_bytree=0.8, random_state=42, verbosity=0))
+])
+# Create a linked process that optimizes structured data parsing using a separate advanced technique.
+lgbm_pipe = Pipeline([
+    ('reg', LGBMRegressor(n_estimators=300, learning_rate=0.05, num_leaves=31, random_state=42))
+])
+# Set up a pipeline for a special iterative method that handles categorical factors in-house without the need for further preprocessing.
+catboost_pipe = Pipeline([
+    ('reg', CatBoostRegressor(iterations=300, learning_rate=0.05, depth=6, random_seed=42, verbose=0))
+])
+# Use a model that employs margin-based separation for regression issues in conjunction with normalization procedures.
+svr_pipe = Pipeline([
+    ('scaler', StandardScaler()),
+    ('reg', SVR(kernel='rbf', C=10, epsilon=0.1))
+])
+# Create a layered model that employs a final learner to increase accuracy and combines the results of two separate approaches.
+stack_model = StackingRegressor(
+    estimators=[
+        ('xgb', xgb_pipe),
+        ('lgbm', lgbm_pipe)
+    ],
+    final_estimator=XGBRegressor(n_estimators=100, learning_rate=0.05, max_depth=4, random_state=42, verbosity=0)
+)
+# Set up a mapping between abbreviated IDs and the corresponding modeling routines or combined learners.
+models = {
+    'XGBoost': xgb_pipe,
+    'LightGBM': lgbm_pipe,
+    'CatBoost': catboost_pipe,
+    'SVR': svr_pipe,
+    'Stacking_XGB_LGBM': stack_model
+}
+
+
+Train/test and evaluate models
+
+# Establish a process for fitting a given prediction algorithm to training data, then evaluate the algorithm's precision using test samples.
+def train_evaluate_model(name, model, X_train, y_train, X_test, y_test):
+    # Indicate which model is being fitted at the moment.
+    print(f"\nTraining {name}...")
+    # To gauge how long training takes, note the beginning time.
+    start_time = time.time()
+    # Use training inputs and their matching outputs to carry out the fit operation.
+    model.fit(X_train, y_train)
+    # Determine how long the fitting procedure took.
+    train_time = time.time() - start_time
+    # Apply the fitted model to the test inputs to provide predictions.
+    y_pred = model.predict(X_test)
+    # Determine the mean absolute difference between the actual and anticipated output numbers.
+    mae = mean_absolute_error(y_test, y_pred)
+    # As an error metric, compute the mean of squared differences.
+    mse = mean_squared_error(y_test, y_pred)
+    # To improve interpretability, get the mean squared error's square root.
+    rmse = npps.sqrt(mse)
+    # Determine the percentage of variability that the model forecasts can account for.
+    r2 = r2_score(y_test, y_pred)
+    #For clarity, display the performance metrics with formatting.
+    print(f"{name} Performance:")
+    # Provide a collection with the model's name, certain quality metrics, the amount of time that has passed since training, and the expected results.
+    print(f"R²: {r2:.4f} | MAE: {mae:.2f} | RMSE: {rmse:.2f} | Training Time: {train_time:.2f} seconds")
+    return {
+        'Model': name,
+        'R²': r2,
+        'MAE': mae,
+        'RMSE': rmse,
+        'Time': train_time,
+        'Predictions': y_pred
+    }
+
+# Establish a procedure to show how calculated estimates for a given model match actual results.
+def plot_predictions(y_test, y_pred, model_name):
+    # Create a new plotting surface with predetermined dimensions.
+    plets.figure(figsize=(8, 6))
+    # Show a scatter plot with corresponding approximations and true targets, adjusting transparency for clarity.
+    plets.scatter(y_test, y_pred, alpha=0.5)
+    # To demonstrate the perfect agreement between actual and predicted results, draw a reference diagonal.
+    plets.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'r--')
+    # Indicate that the horizontal axis represents ground-truth results by labeling it.
+    plets.xlabel("True Values")
+    # To indicate calculated outputs, give the vertical axis a meaningful label.
+    plets.ylabel("Predictions")
+    # For the chosen approach, include a contextual headline that summarizes the plot's content.
+    plets.title(f"True vs Predicted values - {model_name}")
+    # Verify that the layout is changed to prevent elements from overlapping or appearing clipped.
+    plets.tight_layout()
+    # Show the finished image on the screen.
+    plets.show()
+# Create a list at the beginning to collect performance and forecast information for every technique.
+results = []
+# Iterate through every entry in the modeling strategies collection.
+for name, model in models.items():
+    # Run the process that trains and assesses the existing approach, recording the metrics that are returned.
+    res = train_evaluate_model(name, model, X_train, y_train, X_test, y_test)
+    # Show how the calculated and actual outputs for the specific algorithm relate to one another.
+    plot_predictions(y_test, res['Predictions'], name)
+    # To the collective list for additional analysis, add the result dictionary.
+    results.append(res)
+
+Hyperparameter Tuning Example for XGBoost
+
+# Provide modifiable parameters and their ranges for a model that builds and combines decision trees in a sequential fashion.
+xgb_param_dist = {
+    'reg__n_estimators': randint(100, 500),
+    'reg__learning_rate': uniform(0.01, 0.1),
+    'reg__max_depth': randint(3, 10),
+    'reg__subsample': uniform(0.5, 0.5),
+    'reg__colsample_bytree': uniform(0.5, 0.5)
+}
+# Provide choices for the number of trees, learning speed, tree depth, and the percentages of data and features sampled during training.
+lgbm_param_dist = {
+    'reg__n_estimators': randint(100, 500),
+    'reg__learning_rate': uniform(0.01, 0.1),
+    'reg__num_leaves': randint(20, 50),
+    'reg__subsample': uniform(0.5, 0.5),
+    'reg__colsample_bytree': uniform(0.5, 0.5)
+}
+# Enumerate adjustable parameters for a scalable, quick boosting system designed for manipulating structured data.
+catboost_param_dist = {
+    'reg__iterations': randint(100, 500),
+    'reg__learning_rate': uniform(0.01, 0.1),
+    'reg__depth': randint(3, 10),
+    'reg__l2_leaf_reg': uniform(1, 10)
+}
+# Include sampling fractions for rows and columns, complexity measure of units, incremental update speed, and ensemble size variation.svr_param_dist = {
+    'reg__C': uniform(1, 100),
+    'reg__epsilon': uniform(0.01, 0.5),
+    'reg__kernel': ['rbf', 'linear']
+}
+# Establish a process for fine-tuning model parameters by experimenting with various combinations, then assess the predictive accuracy of the model.
+def tune_and_eval(name, pipe, param_dist, X_train, y_train, X_test, y_test):
+    # Notify that the parameter optimization procedure for the specified modeling approach has begun.
+    print(f"\nTuning {name}...")
+    # Set up a randomized search method with defined parameters, including the number of attempts, scoring standards, parallel jobs, cross-validation folds, fixed random seed, and verbosity level.
+    rs = RandomizedSearchCV(pipe, param_distributions=param_dist, n_iter=20, scoring='r2',
+                            cv=3, n_jobs=-1, random_state=42, verbose=1)
+    # Use the training inputs and matching targets to carry out the search fitting procedure.
+    rs.fit(X_train, y_train)
+    # Choose the model instance with the best validation performance from the search results.
+    best = rs.best_estimator_
+    # Use the optimized model to produce predictions for data that hasn't been seen yet.
+    y_pred = best.predict(X_test)
+    # As an error metric, determine the average absolute difference between the expected and actual results.
+    mae = mean_absolute_error(y_test, y_pred)
+    # Calculate the average squared difference between the true and estimated values.
+    mse = mean_squared_error(y_test, y_pred)
+    # To create an understandable error magnitude scale, take the square root of the mean squared error.
+    rmse = npps.sqrt(mse)
+    # Determine the coefficient that shows the percentage of output variance that can be accounted for by the model's predictions.
+    r2 = r2_score(y_test, y_pred)
+    # If available, retrieve the time spent refitting the model; if not, assign no value.
+    train_time = rs.refit_time_ if hasattr(rs, 'refit_time_') else None
+    # Show the ideal setup that the search algorithm discovered.
+    print(f"{name} best params: {rs.best_params_}")
+    # Provide important performance metrics and the amount of time needed to retrain the model.
+    print(f"{name} R²: {r2:.4f}, MAE: {mae:.2f}, RMSE: {rmse:.2f}, Time: {train_time}s")
+    # Provide a dictionary for future use that summarizes the model's identity, evaluation metrics, and training time.
+    return {'Model': name, 'R²': r2, 'MAE': mae, 'RMSE': rmse, 'Time': train_time}
+# Construct a blank container to hold evaluation summaries from various models.
+results = []
+# Execute the model evaluation and hyperparameter search for the boosted tree ensemble, then save the outcomes.
+results.append(tune_and_eval('XGBoost', xgb_pipe, xgb_param_dist, X_train, y_train, X_test, y_test))
+# Save the assessment results and follow the same procedure for the fast structured data learner.
+results.append(tune_and_eval('LightGBM', lgbm_pipe, lgbm_param_dist, X_train, y_train, X_test, y_test))
+# Perform internal category handling algorithm evaluation and parameter tuning, documenting the outcomes.
+results.append(tune_and_eval('CatBoost', catboost_pipe, catboost_param_dist, X_train, y_train, X_test, y_test))
+# Use the margin-based regression model's performance analysis and random search, then record the results.
+results.append(tune_and_eval('SVR', svr_pipe, svr_param_dist, X_train, y_train, X_test, y_test))
+
+# Establish a process for fine-tuning model settings by experimenting with various combinations,
+def tune_and_eval(name, pipe, param_dist, X_train, y_train, X_test, y_test):
+    # and assess its accuracy in prediction.
+    print(f"\nTuning {name}...")
+    # Declare that the process of optimizing the parameters for the specified modeling approach has begun.
+    rs = RandomizedSearchCV(pipe, param_distributions=param_dist, n_iter=20, scoring='r2',
+                            cv=3, n_jobs=-1, random_state=42, verbose=1)
+    # Set up a randomized search method with specified parameter choices.,
+    rs.fit(X_train, y_train)
+    # defining the cross-validation folds, scoring criteria, and number of attempts,
+    best = rs.best_estimator_
+    # verbosity level, fixed random seed, and parallel jobs.
+    y_pred = best.predict(X_test)
+    # Use the training inputs and matching targets to carry out the search fitting procedure.
+    mae = mean_absolute_error(y_test, y_pred)
+    # Choose the model instance with the best validation performance from the search results.
+    mse = mean_squared_error(y_test, y_pred)
+    # Use the optimized model to produce predictions for data that hasn't been seen yet.
+    rmse = npps.sqrt(mse)
+    # As an error metric, determine the average absolute difference between the expected and actual outcomes.
+    r2 = r2_score(y_test, y_pred)
+    # Calculate the average squared difference between the true and estimated values.
+    train_time = rs.refit_time_ if hasattr(rs, 'refit_time_') else None
+    # To provide a comprehensible error magnitude scale, take the square root of the mean squared error.
+    print(f"{name} best params: {rs.best_params_}")
+    # Determine the coefficient that shows the percentage of output variance that can be accounted for by model predictions.
+    print(f"{name} R²: {r2:.4f}, MAE: {mae:.2f}, RMSE: {rmse:.2f}, Time: {train_time}s")
+    # If available, retrieve the time spent refitting the model; if not, assign no value.
+    return {'Model': name, 'R²': r2, 'MAE': mae, 'RMSE': rmse, 'Time': train_time}
+# Show the ideal setup that the search algorithm discovered.
+results = []
+# Provide important performance metrics and the amount of time needed to retrain the model.
+results.append(tune_and_eval('XGBoost', xgb_pipe, xgb_param_dist, X_train, y_train, X_test, y_test))
+# For future usage, return a dictionary that summarizes the model's identity, assessment metrics, and training time.
+results.append(tune_and_eval('LightGBM', lgbm_pipe, lgbm_param_dist, X_train, y_train, X_test, y_test))
+# To gather assessment summaries from various models, create an empty container.
+results.append(tune_and_eval('CatBoost', catboost_pipe, catboost_param_dist, X_train, y_train, X_test, y_test))
+# Execute the model assessment and hyperparameter search for the boosted tree ensemble, # and then save the outcomes.
+results.append(tune_and_eval('SVR', svr_pipe, svr_param_dist, X_train, y_train, X_test, y_test))
+
+Comparison_plot of all results
+
+# Construct a grid of plots with two rows and two columns, then give each figure its own unique dimensions.
+fig, axes = plets.subplots(2, 2, figsize=(14, 10))
+
+# Use the evaluation summary's entries to create a vertical bar graph that compares the explanatory power measure (R2) for each approach.
+sans.barplot(x='Model', y='R²', data=PricePridiction, ax=axes[0,0])
+# Give the first subplot a descriptive heading that highlights how it compares the R2 measure between methods.
+axes[0,0].set_title('Model R² Comparison')
+# Restrict the vertical scale to the metric's range of zero to one, which is its maximum value.
+axes[0,0].set_ylim(0, 1)
+# Write the matching metric value, formatted to two decimal places for clarity, on the top of each bar that is visible.
+axes[0,0].tick_params(axis='x', rotation=45)
+# Add value labels above each bar by iterating over each graphical element in the initial comparison plot.
+for p in axes[0,0].patches:
+    # For each visual bar in the first subplot, note the height that corresponds to the relevant metric.
+    height = p.get_height()
+    # To make the precise metric value in the first chart readable, place a number annotation above each bar.
+    axes[0,0].annotate(f'{height:.2f}',
+        # Create a vertical chart that shows the mean error size for each strategy in the top-right quadrant.
+        (p.get_x() + p.get_width() / 2., height),
+        # Indicate that the second subplot compares mean error measures from different approaches by setting a heading for it.
+        ha='center', va='bottom', fontsize=10, color='black')
+
+# For best clarity, reorient the x-axis label orientation in the second plot.
+sans.barplot(x='Model', y='MAE', data=PricePridiction, ax=axes[0,1])
+# To be ready for labeling, go over each bar plotted in the graph at the top-right.
+axes[0,1].set_title('Model MAE Comparison')
+# In the error size comparison, find the value that each bar's top represents.
+axes[0,1].tick_params(axis='x', rotation=45)
+# In the second subplot, place a centered number label immediately over each column for easy access.
+for p in axes[0,1].patches:
+  # Make a new vertical chart that shows the standard error amount for each technique on the bottom-left.
+    height = p.get_height()
+    # Include a header that explains that the graphic compares the usual forecast deviations in terms of magnitude.
+    axes[0,1].annotate(f'{height:.0f}',
+        # To prevent overlap, rotate the categories in this map along the horizontal axis.
+        (p.get_x() + p.get_width() / 2., height),
+        #At the bottom-right, create the final vertical diagram that illustrates the amount of calculation time needed for each process.
+        ha='center', va='bottom', fontsize=10, color='black')
+
+# To see the average mistake amount from each method, make a vertical bar chart in the subplot grid's lower left quadrant.
+sans.barplot(x='Model', y='RMSE', data=PricePridiction, ax=axes[1,0])
+# To avoid overlap and make the category labels in this subplot easier to read, rotate them along the horizontal axis.
+axes[1,0].set_title('Model RMSE Comparison')
+# To be ready for value annotation, go over each bar in this error comparison graph.
+axes[1,0].tick_params(axis='x', rotation=45)
+# Find each bar's vertical length, which translates to the model's represented metric.
+for p in axes[1,0].patches:
+    height = p.get_height()
+    axes[1,0].annotate(f'{height:.0f}',
+        (p.get_x() + p.get_width() / 2., height),
+        # Put a label with a number right over the top of each bar so that the viewer can easily see the precise integer value for the measure.
+        ha='center', va='bottom', fontsize=10, color='black')
+
+# To show the computation times for each method, create a vertical bar chart in the subplot grid's lower right corner.
+sans.barplot(x='Model', y='Time', data=PricePridiction, ax=axes[1,1])
+# Give this subplot a descriptive title to make it clear that it compares training times (in seconds) for various approaches.
+axes[1,1].set_title('Training Time Comparison (s)')
+# For clarity and to avoid crowding, rotate the model category labels in this chart along the horizontal axis.
+axes[1,1].tick_params(axis='x', rotation=45)
+# To be ready for annotation, go over each bar that is presented in the training time graph.
+for p in axes[1,1].patches:
+    # For every visual bar, get the vertical length that corresponds to the duration value.
+    height = p.get_height()
+    axes[1,1].annotate(f'{height:.0f}',
+        (p.get_x() + p.get_width() / 2., height),
+        ha='center', va='bottom', fontsize=10, color='black')
+# To display the integer value for the measured duration, center and place a numeric label over the top of each column.
+plets.tight_layout()
+# For the best visualization, reorganize the multi-plot figure's component placement and spacing.
+plets.show()
+
+
