@@ -1,4 +1,3 @@
-Perfect! Here’s a **more visually appealing, GitHub-ready README** version for your project with badges, model comparison table, and sections for plots:
 
 ---
 
@@ -94,6 +93,3 @@ Contributions are welcome! Feel free to open issues or submit pull requests to i
 
 ---
 
-I can also **create an actual GitHub-ready visual table of model performances** (R², MAE, RMSE, time) and include example plots so it looks very professional on your repo.
-
-Do you want me to generate that next?
